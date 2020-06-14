@@ -11,10 +11,10 @@ parameter ADDR_NYA = 2;
 ```
 ## ROM initialization sample
 ```
-  prm_rom[ADDR_TRIG_COUNT].prm         = "foo";
-  prm_rom[ADDR_TRIG_COUNT].min         = 0;
-  prm_rom[ADDR_TRIG_COUNT].max         = 100;
-  prm_rom[ADDR_TRIG_COUNT].units       = "foos";
-  prm_rom[ADDR_TRIG_COUNT].rights      = rw;
-  prm_rom[ADDR_TRIG_COUNT].is_exec     = 0;
+  prm_rom[ADDR_FOO].prm    = "foo";
+  prm_rom[ADDR_FOO].min    = 0;
+  prm_rom[ADDR_FOO].max    = 100;
+  prm_rom[ADDR_FOO].units  = "foos";
+  prm_rom[ADDR_FOO].rights = rw;
+  prm_rom[ADDR_FOO].is_exec = 0;
 ```
