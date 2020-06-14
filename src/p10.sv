@@ -205,8 +205,8 @@ module p10 (
   input  logic exec_ok
 );
 
-`include "p10_regs.sv"
-`include "p10_reg_defines.sv"
+`include "../src/verilog/p10_reg_rom.sv"
+`include "../src/verilog/p10_reg_defines.sv"
 
 parameter integer BIN_W = $clog2(10**DAT_LEN);
 parameter integer TIMEOUT_TICKS = 50000000;
