@@ -1,7 +1,7 @@
 # p10
 Convenient FPGA communication
 # Usage
-To use the protocol, information about custom parameters must be provided. The parameters are application-speific and thus are not provided here. User must specify register addresses in `p10_reg_defines.sv` and initialize parameter info ROM in `p10_reg_rom.sv`
+To use the protocol, information about custom parameters must be provided. The parameters are application-speific and thus are not provided here. User must specify register addresses in `p10_reg_defines.sv` and initialize parameter info ROM in `p10_reg_rom.sv`. These two files should be located at `../src/verilog`
 ## Register definition sample
 p10_reg_defines.sv
 ```
