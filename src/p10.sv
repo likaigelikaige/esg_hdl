@@ -11,12 +11,11 @@
 package p10_pkg_common;
   // define maximum lengths of fields
   localparam int CMD_LEN = 8;
-  localparam int PRM_LEN = 8;
+  localparam int PRM_LEN = 20;
   localparam int DAT_LEN = 8;
   localparam int EXEC_LEN = 8;
   localparam int DAT_LEN_BITS = $clog2(10**DAT_LEN);
   localparam int UNITS_LEN = 5;
-  localparam int PRM_COUNT = 9;
 
   // ASCII definitions
   localparam byte START_RX = "`"; // start symbol
@@ -88,7 +87,7 @@ package p10_pkg_common;
 
   // FSMs
 
-  typedef enum logic [8:0] {
+  typedef enum logic [6:0] {
     rx_idle_s,
     rx_wait_start_s,
     rx_cmd_s,
@@ -105,7 +104,7 @@ package p10_pkg_common;
     bcd_wait_rst_s
   } fsm_bcd_t;
 
-  typedef enum logic [8:0] {
+  typedef enum logic [10:0] {
     tx_idle_s,
     tx_cmd_s,
     tx_prm_s,
@@ -119,12 +118,13 @@ package p10_pkg_common;
     tx_wait_rst_s
   } fsm_tx_t;
 
-  typedef enum logic [5:0] {
+  typedef enum logic [7:0] {
     prm_idle_s,
     prm_scan_s,
     prm_check_s,
     prm_write_s,
     prm_conv_s,
+    prm_exec_s,
     prm_read_s,
     prm_wait_rst_s
   } prm_fsm_t;
@@ -179,9 +179,33 @@ package p10_pkg_common;
 
 endpackage
 
+interface exec #(
+  parameter PRM_COUNT = 32,
+  parameter RESPONSE_STRING_LEN = 16
+)
+(
+);
+logic [$clog2(PRM_COUNT+1)-1:0] addr; // same as prm_ram.a above, but for executables
+logic val;
+logic err;
+logic ok;
+logic [RESPONSE_STRING_LEN-1:0][7:0] str;
+modport in (input addr, val, output err, ok, str);
+modport out (output addr, val, input err, ok, str);
+endinterface : exec
+
 import p10_pkg_common::*;
 
-module p10 (
+module p10 #(
+  parameter int CMD_LEN = 8,
+  parameter int PRM_LEN = 20,
+  parameter int DAT_LEN = 8,
+  parameter int EXEC_LEN = 8,
+  parameter int PRM_COUNT = 32,
+  parameter int DAT_LEN_BITS = $clog2(10**DAT_LEN),
+  parameter int UNITS_LEN = 5
+) 
+(
   input  logic clk,
   input  logic rst,
 
@@ -193,27 +217,18 @@ module p10 (
   output logic       txen,
   input  logic       cts,
 
-  input  logic                           clk_ram,
-  input  logic [$clog2(PRM_COUNT+1)-1:0] prm_addr,
-  input  logic [DAT_LEN_BITS-1:0]        prm_ram_d,
-  output logic [DAT_LEN_BITS-1:0]        prm_ram_q,
-  input  logic                           prm_ram_w,
-
-  output prm_t exec_prm,
-  output logic exec_val,
-  input  logic exec_bad,
-  input  logic exec_ok
+  ram_if_sp.mem ram,
+  exec.out exec_if
 );
 
-`include "../src/verilog/p10_reg_rom.sv"
 `include "../src/verilog/p10_reg_defines.sv"
 
 parameter integer BIN_W = $clog2(10**DAT_LEN);
 parameter integer TIMEOUT_TICKS = 50000000;
 parameter integer EXECUTION_TIMEOUT_TICKS = 10000000;
-parameter integer INPUT_FIFO_DEPTH = 5;
-parameter integer OUTPUT_FIFO_DEPTH = 5;
-parameter integer READ_BY_ONE = 1; // force read by one byte. (needed for UART as it deasserts cts 1 tick later than needed, so every second bit is lost)
+parameter integer INPUT_FIFO_DEPTH = 6;
+parameter integer OUTPUT_FIFO_DEPTH = 6;
+parameter integer READ_BY_ONE = 0; // force read by one byte. (needed for UART as it deasserts cts 1 tick later than needed, so every second bit is lost)
 
 // Command definitions
 cmd_t set   = "set";   // Set val for a parameter. ex: "set.freq:10.25k;"
@@ -223,8 +238,7 @@ cmd_t save  = "save";
 cmd_t ver   = "ver";
 cmd_t exec  = "exec";
 
-prm_entry_t prm_rom [0:PRM_COUNT-1];
-
+ 
 fsm_rx_t fsm_rx;
 fsm_tx_t fsm_tx;
 fsm_bcd_t fsm_bcd;
@@ -266,18 +280,14 @@ assign tx_buf.clk = clk;
 
 // parameter ram
 
-logic [$clog2(PRM_COUNT+2)-1:0] prm_rom_addr_int, prm_ram_scan_addr;
-
 prm_entry_t prm_rom_q, cur_check;
-logic prm_ram_w_int;
-logic [DAT_LEN_BITS-1:0] prm_ram_q_int, prm_ram_d_int;
-logic [$clog2(PRM_COUNT+1)-1:0] prm_addr_int, prm_addr_prev;
+logic [$clog2(PRM_COUNT+1)-1:0] prm_ram_a_prev;
 
 // timeout
 
 logic rsp_err, rsp_ok, timeout;
 
-logic conv_bcd, rx_buf_q_v;
+logic conv_bcd;
 logic scan_prm, stop_read;
 
 err_prm_t err_prm;
@@ -303,26 +313,26 @@ end
 
 // ram/rom logic
 
-always @ (posedge clk) begin
-  prm_rom_q <= prm_rom[prm_addr_int]; // readout ROM entry containing info about current parameter
-end
+ram_if_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram(.*);
+ram_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram_inst (.mem_if (prm_ram));
 
-ram_if_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram(.*); // IPv4 bits = 32, MAC bits = 48;
-ram_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram_inst (.mem_if (prm_ram)); // IPv4 bits = 32, MAC bits = 48;
+p10_rom #(PRM_COUNT) p10_rom_inst (
+    .clk   (clk),
+    .addr  (prm_ram.a_a),
+    .entry (prm_rom_q)
+);
 
 assign prm_ram.rst   = 1'b0;
-
 assign prm_ram.clk_a = clk;
-assign prm_ram.a_a   = prm_addr_int;
-assign prm_ram.d_a   = cur_rx_bin;
-assign prm_ram.w_a   = prm_ram_w_int;
+assign prm_ram.a_a   = prm_ram.a_a;
 assign cur_tx_bin    = prm_ram.q_a;
 
-assign prm_ram.clk_b = clk_ram;
-assign prm_ram.a_b   = prm_addr;
-assign prm_ram.d_b   = prm_ram_d;
-assign prm_ram.w_b   = prm_ram_w;
-assign prm_ram_q     = prm_ram.q_b;
+// clock second port with externally provided clock
+assign prm_ram.clk_b = ram.clk;
+assign prm_ram.a_b   = ram.a;
+assign prm_ram.d_b   = ram.d;
+assign prm_ram.w_b   = ram.w;
+assign       ram.q_b = prm_ram.q;
 
 always @ (posedge clk) begin
   if (rst) begin
@@ -331,7 +341,6 @@ always @ (posedge clk) begin
   else begin
     fsm_rst <= tx_done;
     rx_buf.read <= rx_fsm_rdy && !rx_buf.empty;
-    rx_buf_q_v <= rx_buf.read;
   end
 end
 
@@ -373,12 +382,7 @@ always @ (posedge clk) begin
             exec : begin
               fsm_rx <= rx_prm_s;
             end
-            //stop : begin
-
-            //end
-            // load, save  : begin
-            //   fsm_rx <= done_s;
-            // end
+            default : err_rx <= cmd_bad;
             endcase
           end
         else if (rx_buf.data_out == DAT_DLM) begin
@@ -520,15 +524,15 @@ bin2bcd #(
 
 always @ (posedge clk) begin
   if (fsm_rst) begin
-    prm_addr_int <= 0;
-    prm_addr_prev <= 0;
+    prm_ram.a_a <= 0;
+    prm_ram_a_prev <= 0;
     prm_fsm <= prm_idle_s;
     rsp_ok <= 0;
     conv_bin2bcd <= 0;
-    prm_ram_w_int <= 0;
+    prm_ram.w_a <= 0;
     err_prm <= prm_ok;
-    exec_val <= 0;
-    exec_prm <= 0;
+    exec_if.val <= 0;
+    exec_if.addr <= 0;
     exec_to_ctr <= 0;
     cur_check <= 0;
   end
@@ -540,8 +544,8 @@ always @ (posedge clk) begin
       prm_scan_s : begin
         if (prm_rom_q.prm == cur_rx.prm) begin
           cur_check <= prm_rom_q;
-          prm_addr_int <= prm_addr_prev;
-          $display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram_q);
+          prm_ram.a_a <= prm_ram_a_prev;
+          $display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram.q);
           case (cur_rx.cmd)
             set : begin
               if (!prm_rom_q.is_exec) prm_fsm <= prm_check_s; else
@@ -552,23 +556,23 @@ always @ (posedge clk) begin
             end
             exec : begin // executable command
               if (prm_rom_q.is_exec) begin // check for "is executable" flag
-                exec_prm <= cur_rx.prm; // 
-                exec_val <= 1;
+                exec_if.addr <= prm_ram_a_prev; // 
+                exec_if.val <= 1;
               end
               else err_prm <= not_exec;
-              prm_fsm <= prm_wait_rst_s;
+              prm_fsm <= prm_exec_s;
             end
             get : prm_fsm <= prm_conv_s; // go directly to convert internal binary to BCD
           endcase
         end
         else begin
-          prm_addr_int <= prm_addr_int + 1; // scan ROM for parameter string
+          if (prm_ram.a_a == PRM_COUNT + 1) begin // ROM scanned, no parameter with "cur_rx.prm" found
+            $display ("Parameter not found");
+            err_prm <= not_found;
+          end
+          prm_ram.a_a <= prm_ram.a_a + 1; // scan ROM for parameter string
         end
-        prm_addr_prev <= prm_addr_int;
-        if (prm_addr_int == PRM_COUNT + 1) begin // ROM scanned, no parameter with "cur_rx.prm" found
-          $display ("Parameter not found");
-          err_prm <= not_found;
-        end
+        prm_ram_a_prev <= prm_ram.a_a;
       end
       prm_check_s : begin
         if (cur_check.rights == r) begin
@@ -590,13 +594,19 @@ always @ (posedge clk) begin
           rsp_ok <= 1;
           $display ("Received val %d within limits: [%d..%d]", cur_rx_bin, cur_check.min, cur_check.max);
           prm_fsm <= prm_write_s;
+          prm_ram.w_a <= 1;
         end
       end
+      prm_exec_s : begin
+        exec_to_ctr <= exec_to_ctr + 1;
+        if (exec_to_ctr == EXECUTION_TIMEOUT_TICKS) err_prm <= exec_to; 
+        else if (exec_if.err) err_prm <= exec_err;
+        else if (exec_if.ok) rsp_ok <= 1;
+      end
       prm_write_s : begin
-        rsp_ok        <= 1;
-        prm_ram_w_int <= 1;
-        prm_ram_d_int <= cur_rx_bin;
-        prm_fsm       <= prm_wait_rst_s;
+        rsp_ok <= 1;
+        prm_ram.w_a <= 0;
+        prm_fsm <= prm_wait_rst_s;
       end
       prm_conv_s : begin
         conv_bin2bcd <= 1;
@@ -610,11 +620,7 @@ always @ (posedge clk) begin
         end
       end
       prm_wait_rst_s : begin
-        prm_ram_w_int <= 0;
-        exec_to_ctr <= to_ctr + 1;
-        if (exec_to_ctr == EXECUTION_TIMEOUT_TICKS) err_prm <= exec_to; 
-        else if (exec_bad) err_prm <= exec_err;
-        else if (exec_ok) rsp_ok <= 1;
+
       end
     endcase
   end
@@ -670,14 +676,14 @@ logic tx_bcd_val;
 logic [7:0] cur_dig;
 
 parameter integer STRING_LEN = 32;
-parameter integer NUM_ERRORS = 13;
+parameter integer NUM_ERRORS = 16;
 
 typedef struct packed {
   logic [0:STRING_LEN-1][7:0] val;
   err_t err;
 } rsp_err_t;
 
-rsp_err_t rsp_rom [NUM_ERRORS-1:0];
+rsp_err_t rsp_rom [0:NUM_ERRORS-1];
 rsp_err_t rsp_rom_q;
 
 logic [$clog2(NUM_ERRORS+1)-1:0] rsp_rom_addr;
@@ -690,6 +696,7 @@ logic [0:STRING_LEN-1][7:0] cur_rsp_string, param_set_str, exec_success_str, ver
 logic [7:0] cur_rsp_ctr;
 
 initial begin
+
   rsp_rom[0].val = "error: bad command";
   rsp_rom[0].err = rx_cmd_bad;
 
