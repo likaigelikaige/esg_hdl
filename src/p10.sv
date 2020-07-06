@@ -174,6 +174,7 @@ package p10_pkg_common;
       7 : bcd2ascii = 8'h37;
       8 : bcd2ascii = 8'h38;
       9 : bcd2ascii = 8'h39;
+      default : bcd2ascii = 8'h30;
     endcase  
   endfunction : bcd2ascii
 
@@ -324,7 +325,7 @@ p10_rom #(PRM_COUNT) p10_rom_inst (
 
 assign prm_ram.rst   = 1'b0;
 assign prm_ram.clk_a = clk;
-assign prm_ram.a_a   = prm_ram.a_a;
+assign prm_ram.d_a   = cur_rx_bin;
 assign cur_tx_bin    = prm_ram.q_a;
 
 // clock second port with externally provided clock
@@ -747,8 +748,8 @@ logic [UNITS_LEN-1:0][7:0] cur_tx_units;
 	
 always @ (posedge clk) begin
   if (fsm_rst) begin
-    tx_buf.data_in     <= 0;
-    tx_buf.write     <= 0;
+    tx_buf.data_in <= 0;
+    tx_buf.write   <= 0;
     cmd_ctr_tx     <= 0;
     prm_ctr_tx     <= 0;
     dat_ctr_tx     <= 0;
