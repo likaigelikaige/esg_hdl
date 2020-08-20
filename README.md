@@ -4,18 +4,38 @@ Convenient FPGA communication
 The main purpose of the protocol is to configure, monitor and control FPGA based devices over digital interfaces such as UART (VCOM) or TCP/IP. The p10 stands for protocol decimal as it operates with decimal notation numbers. All text and numbers are ASCII symbols. 
 The p10 is a request-reply protocol in which an FPGA acts as a server replying to a client. There are several fields in a request: `command` a `parameter` and a `value`.
 ### Command description
+Each request starts with a \` symbol and ends with a ;. Each reply starts with > and ends with `;`. 
+
 - `set`. Set parameter to a specific value. The value is expressed in integer decimal notation with a possible -k suffix representing x1000 multiplier. If -k suffix is used, a dot may be inserted in the number. As an example request suppose one sets parameter `freq` to a value of 12500: 
 ``\`set-freq:12.5k;``. User can define a parameter read-only and set limits within which the value is considered valid. It is described later.
-- `get`. Readout parameter's value. The returned number will always be an integer and will be appended with `units`. Ex.: `\`get-freq; will should be replied with ``freq:12500Hz;`
-- `exec`. Execute 
-Each request starts with a \` symbol and ends with a ;. Each reply starts with > and ends with ;.
 
-## Usage
-To use the protocol, information about custom parameters must be provided. The parameters are application-specific and thus are not provided here. User must specify register addresses in `p10_reg_defines.sv` and initialize parameter info ROM in `p10_reg_rom.sv`. These two files should be located at `../src/verilog`
+- `get`. Readout parameter's value. The returned number will always be an integer and will be appended with `units`
+
+- `exec`. A command to execute user-defined logic. Provides a user interface to trigger events and return if the execution was successfull.
+```
+output val; 
+input err;
+input ok;
+```
+- `val` p10 asserts this signal as it processes client's `exec` command
+- `err` user logic asserts this signal to indicate execution was unsuccessfull. Should be asseted before `EXEC_TIMEOUT_TICKS`
+- `ok` user logic asserts this signal to indicate execution was successfull
+
+Example of successfully executed command:
+```
+`exec-apply;
+>apply:executed successfully;
+--- or ---
+>apply: execution timeout;
+--- or ---
+>apply: failed to execute;
+```
+# Customizing
+To use the protocol, information about custom parameters must be provided. The parameters are application-speific and thus are not provided here. User must specify register addresses in `p10_reg_defines.sv` and initialize parameter info ROM in `p10_reg_rom.sv`. These two files should be located at `../src/verilog`
 ## Register definition sample
 p10_reg_defines.sv
 ```
-parameter ADDR_FREQ = 0;
+parameter ADDR_FOO = 0;
 parameter ADDR_BAR = 1;
 parameter ADDR_NYA = 2;
 ```
@@ -28,3 +48,9 @@ parameter ADDR_NYA = 2;
   prm_rom[ADDR_FOO].rights = rw;
   prm_rom[ADDR_FOO].is_exec = 0;
 ```
+## Logic overview
+The logic of p10 is composed of three main parts:
+- Receive logic
+- Internal logic
+- Transmit logic
+
