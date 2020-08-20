@@ -6,16 +6,16 @@ The p10 is a request-reply protocol in which an FPGA acts as a server replying t
 ### Command description
 - `set`. Set parameter to a specific value. The value is expressed in integer decimal notation with a possible -k suffix representing x1000 multiplier. If -k suffix is used, a dot may be inserted in the number. As an example request suppose one sets parameter `freq` to a value of 12500: 
 ``\`set-freq:12.5k;``. User can define a parameter read-only and set limits within which the value is considered valid. It is described later.
-
-- `get`. Readout parameter's value. The returned number will always be an integer and will be appended with `units`
+- `get`. Readout parameter's value. The returned number will always be an integer and will be appended with `units`. Ex.: `\`get-freq; will should be replied with ``freq:12500Hz;`
+- `exec`. Execute 
 Each request starts with a \` symbol and ends with a ;. Each reply starts with > and ends with ;.
 
-# Usage
-To use the protocol, information about custom parameters must be provided. The parameters are application-speific and thus are not provided here. User must specify register addresses in `p10_reg_defines.sv` and initialize parameter info ROM in `p10_reg_rom.sv`. These two files should be located at `../src/verilog`
+## Usage
+To use the protocol, information about custom parameters must be provided. The parameters are application-specific and thus are not provided here. User must specify register addresses in `p10_reg_defines.sv` and initialize parameter info ROM in `p10_reg_rom.sv`. These two files should be located at `../src/verilog`
 ## Register definition sample
 p10_reg_defines.sv
 ```
-parameter ADDR_FOO = 0;
+parameter ADDR_FREQ = 0;
 parameter ADDR_BAR = 1;
 parameter ADDR_NYA = 2;
 ```
