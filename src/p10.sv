@@ -599,8 +599,14 @@ always @ (posedge clk) begin
       prm_exec_s : begin
         exec_to_ctr <= exec_to_ctr + 1;
         if (exec_to_ctr == EXECUTION_TIMEOUT_TICKS) err_prm <= exec_to; 
-        else if (exec_if.err) err_prm <= exec_err;
-        else if (exec_if.ok) rsp_ok <= 1;
+	else if (exec_if.err) begin
+	      err_prm <= exec_err;
+	      exec_if.val <= 0;
+	end
+	else if (exec_if.ok) begin
+	      rsp_ok <= 1;
+	      exec_if.val <= 0;
+	end
       end
       prm_write_s : begin
         rsp_ok <= 1;
