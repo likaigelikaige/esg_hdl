@@ -7,7 +7,7 @@
 // - "mon" monitors a "parameter"
 
 // Common package for p10. Normally shouldn't be modified
-`define VERSION "p10: 2.0; 04.25.2020"
+`define VERSION "p10: 2.1, 21.07.2020"
 package p10_pkg_common;
   // define maximum lengths of fields
   localparam int CMD_LEN = 8;
@@ -289,12 +289,12 @@ logic [$clog2(PRM_COUNT+1)-1:0] prm_ram_a_prev;
 logic rsp_err, rsp_ok, timeout;
 
 logic conv_bcd;
-logic scan_prm, stop_read;
+logic scan_prm;
 
 err_prm_t err_prm;
 prm_fsm_t prm_fsm;
 
-logic rx_fsm_rdy, rx_fifo_req, tx_done;
+logic tx_done;
 
 err_rx_t err_rx;
 
@@ -329,11 +329,11 @@ assign prm_ram.d_a   = cur_rx_bin;
 assign cur_tx_bin    = prm_ram.q_a;
 
 // clock second port with externally provided clock
-assign prm_ram.clk_b = ram.clk;
+assign prm_ram.clk_b = clk;
 assign prm_ram.a_b   = ram.a;
 assign prm_ram.d_b   = ram.d;
 assign prm_ram.w_b   = ram.w;
-assign       ram.q_b = prm_ram.q;
+assign       ram.q   = prm_ram.q_b;
 
 always @ (posedge clk) begin
   if (rst) begin
@@ -341,11 +341,10 @@ always @ (posedge clk) begin
   end
   else begin
     fsm_rst <= tx_done;
-    rx_buf.read <= rx_fsm_rdy && !rx_buf.empty;
+    rx_buf.read <= (fsm_rx != rx_wait_rst_s) && !rx_buf.empty;
   end
 end
 
-assign rx_fsm_rdy = (fsm_rx != rx_wait_rst_s);
 logic rsp_ver;
 always @ (posedge clk) begin
   if (fsm_rst) begin
@@ -359,7 +358,6 @@ always @ (posedge clk) begin
     k_mod_pres <= 0;
     conv_bcd   <= 0;
     scan_prm   <= 0;
-    stop_read  <= 0;
     err_rx     <= rx_ok;
     rsp_ver    <= 0;
   end
@@ -698,48 +696,48 @@ logic [7:0] cur_rsp_ctr;
 
 initial begin
 
-  rsp_rom[0].val = "error: bad command";
+  rsp_rom[0].val = "error:bad command";
   rsp_rom[0].err = rx_cmd_bad;
 
-  rsp_rom[1].val = "error: bad data";
+  rsp_rom[1].val = "error:bad data";
   rsp_rom[1].err = rx_data_bad;
 
-  rsp_rom[2].val = "error: bad parameter";
+  rsp_rom[2].val = "error:bad parameter";
   rsp_rom[2].err = rx_prm_bad;
 
-  rsp_rom[3].val = "error: data not int";
+  rsp_rom[3].val = "error:data not int";
   rsp_rom[3].err = rx_data_not_int;
 
-  rsp_rom[4].val = "error: read-only";
+  rsp_rom[4].val = "error:read-only";
   rsp_rom[4].err = prm_read_only;   
 
-  rsp_rom[5].val = "error: parameter not found";
+  rsp_rom[5].val = "error:parameter not found";
   rsp_rom[5].err = prm_not_found;   
 
-  rsp_rom[6].val = "error: executable only";
+  rsp_rom[6].val = "error:executable only";
   rsp_rom[6].err = prm_exec_only;   
 
-  rsp_rom[7].val = "error: not executable";
+  rsp_rom[7].val = "error:not executable";
   rsp_rom[7].err = prm_not_exec;   
     
-  rsp_rom[8].val = "error: failed to execute";
+  rsp_rom[8].val = "error:failed to execute";
   rsp_rom[8].err = prm_exec_err;   
 
-  rsp_rom[9].val = "error: execution timeout";
+  rsp_rom[9].val = "error:execution timeout";
   rsp_rom[9].err = prm_exec_to;   
 
-  rsp_rom[10].val = "error: value too low";
+  rsp_rom[10].val = "error:value too low";
   rsp_rom[10].err = prm_low;   
 
-  rsp_rom[11].val = "error: value too high";
+  rsp_rom[11].val = "error:value too high";
   rsp_rom[11].err = prm_high;
 
-  rsp_rom[12].val = "error: timeout";
+  rsp_rom[12].val = "error:timeout";
   rsp_rom[12].err = rx_timeout;
 
-  param_set_str = ": parameter set";
-  exec_success_str = ": executed successfully";
-  unknown_err_str = "error: unknown error";
+  param_set_str = ":parameter set";
+  exec_success_str = ":executed successfully";
+  unknown_err_str = "error:unknown error";
   ver_string = `VERSION;
 end
 
@@ -770,6 +768,7 @@ always @ (posedge clk) begin
         tx_buf.data_in <= ">";
         cur_tx <= cur_rx;
         if (rsp_ver) begin
+          tx_buf.write <= 1;
           cur_rsp_string <= ver_string;
           fsm_tx <= tx_string_s;
         end
@@ -790,6 +789,7 @@ always @ (posedge clk) begin
         else if (rsp_err) begin
           rsp_rom_addr <= rsp_rom_addr + 1;
           if (rsp_rom_q.err == err) begin
+            tx_buf.write <= 1;
             fsm_tx <= tx_string_s;
             cur_rsp_string <= rsp_rom_q.val;
           end
