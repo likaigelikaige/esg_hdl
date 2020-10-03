@@ -544,7 +544,7 @@ always @ (posedge clk) begin
         if (prm_rom_q.prm == cur_rx.prm) begin
           cur_check <= prm_rom_q;
           prm_ram.a_a <= prm_ram_a_prev;
-          $display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram.q);
+		$display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram.q_a);
           case (cur_rx.cmd)
             set : begin
               if (!prm_rom_q.is_exec) prm_fsm <= prm_check_s; else
