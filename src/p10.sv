@@ -259,7 +259,7 @@ logic [$clog2(DAT_LEN+1)-1:0] dat_ctr_rx, dat_ctr_tx, dot_pos;
 
 logic [2:0] shift;
 logic [BIN_W-1:0] cur_rx_bin, cur_tx_bin;
-logic [DAT_LEN-1:0][3:0] tx_bcd, cur_tx_bcd, rx_bcd, rx_bcd_shifted = 0;
+logic [DAT_LEN-1:0][3:0] tx_bcd, cur_tx_bcd, rx_bcd;
 logic conv_bcd2bin, conv_bin2bcd;
 
 // input buffer
