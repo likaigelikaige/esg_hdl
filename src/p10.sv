@@ -13,7 +13,7 @@ package p10_pkg_common;
   localparam int CMD_LEN = 8;
   localparam int PRM_LEN = 20;
   localparam int DAT_LEN = 8;
-  localparam int EXEC_LEN = 8;
+  localparam int EXE_LEN = 8;
   localparam int DAT_LEN_BITS = $clog2(10**DAT_LEN);
   localparam int UNITS_LEN = 5;
 
@@ -35,7 +35,7 @@ package p10_pkg_common;
 
   typedef logic [CMD_LEN-1:0][7:0] cmd_t;
   typedef logic [PRM_LEN-1:0][7:0] prm_t;
-  typedef logic [EXEC_LEN-1:0][7:0] exec_t;
+  typedef logic [EXE_LEN-1:0][7:0] exe_t;
 
   typedef struct packed {
     cmd_t cmd;
@@ -55,10 +55,10 @@ package p10_pkg_common;
     rx_prm_bad      = 14'b00000000001000,
     rx_data_not_int = 14'b00000000010000,
     prm_read_only   = 14'b00000000100000,
-    prm_exec_only   = 14'b00000001000000,
-    prm_not_exec    = 14'b00000010000000,
-    prm_exec_err    = 14'b00000100000000, 
-    prm_exec_to     = 14'b00001000000000, 
+    prm_exe_only   = 14'b00000001000000,
+    prm_not_exe    = 14'b00000010000000,
+    prm_exe_err    = 14'b00000100000000, 
+    prm_exe_to     = 14'b00001000000000, 
     prm_not_found   = 14'b00010000000000,
     prm_low         = 14'b00100000000000,
     prm_high        = 14'b01000000000000,
@@ -77,10 +77,10 @@ package p10_pkg_common;
      prm_ok    = 9'b000000001,
      not_found = 9'b000000010,
      read_only = 9'b000000100, 
-     exec_only = 9'b000001000, 
-     not_exec  = 9'b000010000, 
-     exec_err  = 9'b000100000, 
-     exec_to   = 9'b001000000, 
+     exe_only = 9'b000001000, 
+     not_exe  = 9'b000010000, 
+     exe_err  = 9'b000100000, 
+     exe_to   = 9'b001000000, 
      low       = 9'b010000000,
      high      = 9'b100000000
   } err_prm_t;
@@ -124,7 +124,7 @@ package p10_pkg_common;
     prm_check_s,
     prm_write_s,
     prm_conv_s,
-    prm_exec_s,
+    prm_exe_s,
     prm_read_s,
     prm_wait_rst_s
   } prm_fsm_t;
@@ -140,7 +140,7 @@ package p10_pkg_common;
     logic [DAT_LEN_BITS-1:0]   max;
     logic [UNITS_LEN-1:0][7:0] units;
     rights_t                   rights;
-    bit                        is_exec;
+    bit                        is_exe;
   } prm_entry_t;
 
   function [3:0] ascii2bcd;
@@ -180,20 +180,20 @@ package p10_pkg_common;
 
 endpackage
 
-interface exec #(
+interface exe #(
   parameter PRM_COUNT = 32,
   parameter RESPONSE_STRING_LEN = 16
 )
 (
 );
-logic [$clog2(PRM_COUNT+1)-1:0] addr; // same as prm_ram.a above, but for executables
+logic [$clog2(PRM_COUNT+1)-1:0] addr; // same as prm_ram.a above, but for exeutables
 logic val;
 logic err;
 logic ok;
 logic [RESPONSE_STRING_LEN-1:0][7:0] str;
 modport in (input addr, val, output err, ok, str);
 modport out (output addr, val, input err, ok, str);
-endinterface : exec
+endinterface : exe
 
 import p10_pkg_common::*;
 
@@ -201,7 +201,7 @@ module p10 #(
   parameter int CMD_LEN = 8,
   parameter int PRM_LEN = 20,
   parameter int DAT_LEN = 8,
-  parameter int EXEC_LEN = 8,
+  parameter int EXE_LEN = 8,
   parameter int PRM_COUNT = 32,
   parameter int DAT_LEN_BITS = $clog2(10**DAT_LEN),
   parameter int UNITS_LEN = 5
@@ -219,14 +219,14 @@ module p10 #(
   input  logic       cts,
 
   ram_if_sp.mem ram,
-  exec.out exec_if
+  exe.out exe_if
 );
 
 `include "../src/verilog/p10_reg_defines.sv"
 
 parameter integer BIN_W = $clog2(10**DAT_LEN);
 parameter integer TIMEOUT_TICKS = 50000000;
-parameter integer EXECUTION_TIMEOUT_TICKS = 10000000;
+parameter integer EXEUTION_TIMEOUT_TICKS = 10000000;
 parameter integer INPUT_FIFO_DEPTH = 6;
 parameter integer OUTPUT_FIFO_DEPTH = 6;
 parameter integer READ_BY_ONE = 0; // force read by one byte. (needed for UART as it deasserts cts 1 tick later than needed, so every second bit is lost)
@@ -237,7 +237,7 @@ cmd_t get   = "get";   // Get current val of a parameter. ex: "get.freq;"
 cmd_t mon   = "mon";   // Monitor a parameter. ex: "mon.current;"
 cmd_t save  = "save";
 cmd_t ver   = "ver";
-cmd_t exec  = "exec";
+cmd_t exe  = "exe";
 
  
 fsm_rx_t fsm_rx;
@@ -299,7 +299,7 @@ logic tx_done;
 err_rx_t err_rx;
 
 logic [$clog2(TIMEOUT_TICKS+1)-1:0] to_ctr;
-logic [$clog2(EXECUTION_TIMEOUT_TICKS+1)-1:0] exec_to_ctr;
+logic [$clog2(EXEUTION_TIMEOUT_TICKS+1)-1:0] exe_to_ctr;
 
 always @ (posedge clk) begin
   if (fsm_rst) begin
@@ -378,7 +378,7 @@ always @ (posedge clk) begin
             set, get, mon : begin
               fsm_rx <= rx_prm_s;
             end
-            exec : begin
+            exe : begin
               fsm_rx <= rx_prm_s;
             end
             default : err_rx <= cmd_bad;
@@ -406,7 +406,7 @@ always @ (posedge clk) begin
           $display("-> prm: %s", cur_rx.prm);
           fsm_rx <= rx_dat_s;
         end
-        else if (rx_buf.data_out == DAT_DLM && (cur_rx.cmd == get || cur_rx.cmd == exec)) begin
+        else if (rx_buf.data_out == DAT_DLM && (cur_rx.cmd == get || cur_rx.cmd == exe)) begin
           cur_rx.prm_len = prm_ctr_rx;
           $display("-> prm: %s", cur_rx.prm);
           fsm_rx <= rx_wait_rst_s;
@@ -523,17 +523,17 @@ bin2bcd #(
 
 always @ (posedge clk) begin
   if (fsm_rst) begin
-    prm_ram.a_a <= 0;
+    prm_fsm        <= prm_idle_s;
+    err_prm        <= prm_ok;
+    rsp_ok         <= 0;
+    prm_ram.a_a    <= 0;
     prm_ram_a_prev <= 0;
-    prm_fsm <= prm_idle_s;
-    rsp_ok <= 0;
-    conv_bin2bcd <= 0;
-    prm_ram.w_a <= 0;
-    err_prm <= prm_ok;
-    exec_if.val <= 0;
-    exec_if.addr <= 0;
-    exec_to_ctr <= 0;
-    cur_check <= 0;
+    conv_bin2bcd   <= 0;
+    prm_ram.w_a    <= 0;
+    exe_if.val     <= 0;
+    exe_if.addr    <= 0;
+    exe_to_ctr     <= 0;
+    cur_check      <= 0;
   end
   else begin
     case (prm_fsm)
@@ -544,22 +544,22 @@ always @ (posedge clk) begin
         if (prm_rom_q.prm == cur_rx.prm) begin
           cur_check <= prm_rom_q;
           prm_ram.a_a <= prm_ram_a_prev;
-		$display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram.q_a);
+		      $display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram.q_a);
           case (cur_rx.cmd)
             set : begin
-              if (!prm_rom_q.is_exec) prm_fsm <= prm_check_s; else
+              if (!prm_rom_q.is_exe) prm_fsm <= prm_check_s; else
               begin
-                err_prm <= exec_only;
+                err_prm <= exe_only;
                 prm_fsm <= prm_wait_rst_s;
               end
             end
-            exec : begin // executable command
-              if (prm_rom_q.is_exec) begin // check for "is executable" flag
-                exec_if.addr <= prm_ram_a_prev; // 
-                exec_if.val <= 1;
+            exe : begin // exeutable command
+              if (prm_rom_q.is_exe) begin // check for "is exeutable" flag
+                exe_if.addr <= prm_ram_a_prev; // 
+                exe_if.val <= 1;
               end
-              else err_prm <= not_exec;
-              prm_fsm <= prm_exec_s;
+              else err_prm <= not_exe;
+              prm_fsm <= prm_exe_s;
             end
             get : prm_fsm <= prm_conv_s; // go directly to convert internal binary to BCD
           endcase
@@ -596,17 +596,17 @@ always @ (posedge clk) begin
           prm_ram.w_a <= 1;
         end
       end
-      prm_exec_s : begin
-        exec_to_ctr <= exec_to_ctr + 1;
-        if (exec_to_ctr == EXECUTION_TIMEOUT_TICKS) err_prm <= exec_to; 
-	else if (exec_if.err) begin
-	      err_prm <= exec_err;
-	      exec_if.val <= 0;
-	end
-	else if (exec_if.ok) begin
-	      rsp_ok <= 1;
-	      exec_if.val <= 0;
-	end
+      prm_exe_s : begin
+        exe_to_ctr <= exe_to_ctr + 1;
+        if (exe_to_ctr == EXEUTION_TIMEOUT_TICKS) err_prm <= exe_to; 
+        else if (exe_if.err) begin
+	        err_prm <= exe_err;
+	        exe_if.val <= 0;
+	      end
+	      else if (exe_if.ok) begin
+	        rsp_ok <= 1;
+	        exe_if.val <= 0;
+	      end
       end
       prm_write_s : begin
         rsp_ok <= 1;
@@ -657,10 +657,10 @@ always @ (posedge clk) begin
       case (err_prm)
         prm_ok       : err <= none;
         not_found    : err <= prm_not_found;
-        exec_only    : err <= prm_exec_only;
-        not_exec     : err <= prm_not_exec;
-        exec_err     : err <= prm_exec_err;
-        exec_to      : err <= prm_exec_to;
+        exe_only    : err <= prm_exe_only;
+        not_exe     : err <= prm_not_exe;
+        exe_err     : err <= prm_exe_err;
+        exe_to      : err <= prm_exe_to;
         read_only    : err <= prm_read_only;
         low          : err <= prm_low;
         high         : err <= prm_high;
@@ -697,11 +697,10 @@ always @ (posedge clk) begin
   rsp_rom_q <= rsp_rom[rsp_rom_addr];
 end
 
-logic [0:STRING_LEN-1][7:0] cur_rsp_string, param_set_str, exec_success_str, ver_string, unknown_err_str;
+logic [0:STRING_LEN-1][7:0] cur_rsp_string, param_set_str, exe_success_str, ver_string, unknown_err_str;
 logic [7:0] cur_rsp_ctr;
 
 initial begin
-
   rsp_rom[0].val = "error:bad command";
   rsp_rom[0].err = rx_cmd_bad;
 
@@ -721,16 +720,16 @@ initial begin
   rsp_rom[5].err = prm_not_found;   
 
   rsp_rom[6].val = "error:executable only";
-  rsp_rom[6].err = prm_exec_only;   
+  rsp_rom[6].err = prm_exe_only;   
 
   rsp_rom[7].val = "error:not executable";
-  rsp_rom[7].err = prm_not_exec;   
+  rsp_rom[7].err = prm_not_exe;   
     
   rsp_rom[8].val = "error:failed to execute";
-  rsp_rom[8].err = prm_exec_err;   
+  rsp_rom[8].err = prm_exe_err;   
 
   rsp_rom[9].val = "error:execution timeout";
-  rsp_rom[9].err = prm_exec_to;   
+  rsp_rom[9].err = prm_exe_to;   
 
   rsp_rom[10].val = "error:value too low";
   rsp_rom[10].err = prm_low;   
@@ -742,7 +741,7 @@ initial begin
   rsp_rom[12].err = rx_timeout;
 
   param_set_str = ":parameter set";
-  exec_success_str = ":executed successfully";
+  exe_success_str = ":executed successfully";
   unknown_err_str = "error:unknown error";
   ver_string = `VERSION;
 end
@@ -787,7 +786,7 @@ always @ (posedge clk) begin
           cur_tx_units <= prm_rom_q.units;
           case (cur_rx.cmd)
             set : cur_rsp_string <= param_set_str;
-            exec : cur_rsp_string <= exec_success_str;
+            exe : cur_rsp_string <= exe_success_str;
 				    default : cur_rsp_string <= unknown_err_str;
 			    endcase	
           fsm_tx <= tx_prm_s;
@@ -815,7 +814,7 @@ always @ (posedge clk) begin
         prm_ctr_tx <= prm_ctr_tx + 1;
         if (prm_ctr_tx == PRM_LEN - 1) begin
           case (cur_rx.cmd)     
-            set, exec : fsm_tx <= tx_string_s;
+            set, exe : fsm_tx <= tx_string_s;
             get : fsm_tx <= tx_prm_dlm_s;
             default : fsm_tx <= tx_stop_s;
           endcase
@@ -880,7 +879,7 @@ always @ (posedge clk) begin
     tx_buf.read <= 0;
   end
   else begin
-    tx_buf.read <= (cts && !tx_buf.empty && !(READ_BY_ONE && tx_buf.read)); // readout bytes by one if clear to send
+    tx_buf.read <= (cts && !tx_buf.empty && !(READ_BY_ONE && tx_buf.read)); // readout bytes by one if clear to send high
   end
 end
 
