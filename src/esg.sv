@@ -1,13 +1,13 @@
 // An ASCII-based decimal protocol for interfacing FPGAs from various command lines over COM port, UDP, TCP, etc.
-// p10 supports multimple "commands":
+// esg supports multimple "commands":
 // - "help" lists a help string
 // - "list" lists commands
 // - "set" sets a "parameter" to a val
 // - "read" reads out a "parameter"
 // - "mon" monitors a "parameter"
 
-// Common package for p10. Normally shouldn't be modified
-`define VERSION "p10: 2.1, 21.07.2020"
+// Common package for esg. Normally shouldn't be modified
+`define VERSION "esg: 2.1, 21.07.2020"
 package p10_pkg_common;
   // define maximum lengths of fields
   localparam int CMD_LEN = 8;
@@ -197,7 +197,7 @@ endinterface : exe
 
 import p10_pkg_common::*;
 
-module p10 #(
+module esg #(
   parameter int CMD_LEN = 8,
   parameter int PRM_LEN = 20,
   parameter int DAT_LEN = 8,
@@ -888,4 +888,4 @@ assign txd = tx_buf.data_out;
 
 assign txen = !tx_buf.empty;
 
-endmodule : p10
+endmodule : esg
