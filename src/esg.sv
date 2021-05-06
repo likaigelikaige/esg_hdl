@@ -8,7 +8,7 @@
 
 // Common package for esg. Normally shouldn't be modified
 `define VERSION "esg: 2.1, 21.07.2020"
-package p10_pkg_common;
+package esg_pkg_common;
   // define maximum lengths of fields
   localparam int CMD_LEN = 8;
   localparam int PRM_LEN = 20;
@@ -23,8 +23,8 @@ package p10_pkg_common;
   localparam byte CMD_DLM  = "-"; // command delimiter
   localparam byte PRM_DLM  = ":"; // parameter delimiter
   localparam byte DAT_DLM  = ";"; // data delimiter
-  localparam byte K_MOD  = "k"; // x1000 modfier
-  localparam byte DOT    = "."; // dot symbol
+  localparam byte K_MOD    = "k"; // x1000 modfier
+  localparam byte DOT      = "."; // dot symbol
 
   typedef enum byte {
     type_decimal,
@@ -55,10 +55,10 @@ package p10_pkg_common;
     rx_prm_bad      = 14'b00000000001000,
     rx_data_not_int = 14'b00000000010000,
     prm_read_only   = 14'b00000000100000,
-    prm_exe_only   = 14'b00000001000000,
-    prm_not_exe    = 14'b00000010000000,
-    prm_exe_err    = 14'b00000100000000, 
-    prm_exe_to     = 14'b00001000000000, 
+    prm_exe_only    = 14'b00000001000000,
+    prm_not_exe     = 14'b00000010000000,
+    prm_exe_err     = 14'b00000100000000, 
+    prm_exe_to      = 14'b00001000000000, 
     prm_not_found   = 14'b00010000000000,
     prm_low         = 14'b00100000000000,
     prm_high        = 14'b01000000000000,
@@ -77,10 +77,10 @@ package p10_pkg_common;
      prm_ok    = 9'b000000001,
      not_found = 9'b000000010,
      read_only = 9'b000000100, 
-     exe_only = 9'b000001000, 
-     not_exe  = 9'b000010000, 
-     exe_err  = 9'b000100000, 
-     exe_to   = 9'b001000000, 
+     exe_only  = 9'b000001000, 
+     not_exe   = 9'b000010000, 
+     exe_err   = 9'b000100000, 
+     exe_to    = 9'b001000000, 
      low       = 9'b010000000,
      high      = 9'b100000000
   } err_prm_t;
@@ -195,7 +195,7 @@ modport in (input addr, val, output err, ok, str);
 modport out (output addr, val, input err, ok, str);
 endinterface : exe
 
-import p10_pkg_common::*;
+import esg_pkg_common::*;
 
 module esg #(
   parameter int CMD_LEN = 8,
@@ -222,670 +222,670 @@ module esg #(
   exe.out exe_if
 );
 
-`include "../../esg_include/esg_reg_defines.sv"
-
-parameter integer BIN_W = $clog2(10**DAT_LEN);
-parameter integer TIMEOUT_TICKS = 50000000;
-parameter integer EXEUTION_TIMEOUT_TICKS = 10000000;
-parameter integer INPUT_FIFO_DEPTH = 6;
-parameter integer OUTPUT_FIFO_DEPTH = 6;
-parameter integer READ_BY_ONE = 0; // force read by one byte. (needed for UART as it deasserts cts 1 tick later than needed, so every second bit is lost)
-
-// Command definitions
-cmd_t set   = "set";   // Set val for a parameter. ex: "set.freq:10.25k;"
-cmd_t get   = "get";   // Get current val of a parameter. ex: "get.freq;"
-cmd_t mon   = "mon";   // Monitor a parameter. ex: "mon.current;"
-cmd_t save  = "save";
-cmd_t ver   = "ver";
-cmd_t exe  = "exe";
-
- 
-fsm_rx_t fsm_rx;
-fsm_tx_t fsm_tx;
-fsm_bcd_t fsm_bcd;
-
-logic fsm_rst;
-err_t err;
-op_t cur_rx, cur_tx;
-
-logic dot_pres; 
-logic k_mod_pres;
-logic bcd2bin_rdy;
-logic check_prm;
-
-logic [$clog2(CMD_LEN+1)-1:0] cmd_ctr_rx, cmd_ctr_tx;
-logic [$clog2(PRM_LEN+1)-1:0] prm_ctr_rx, prm_ctr_tx;
-logic [$clog2(DAT_LEN+1)-1:0] dat_ctr_rx, dat_ctr_tx, dot_pos;
-
-logic [2:0] shift;
-logic [BIN_W-1:0] cur_rx_bin, cur_tx_bin;
-logic [DAT_LEN-1:0][3:0] tx_bcd, cur_tx_bcd, rx_bcd;
-logic conv_bcd2bin, conv_bin2bcd;
-
-// input buffer
-fifo_sc_if #(INPUT_FIFO_DEPTH, 8) rx_buf(.*);
-fifo_sc #(INPUT_FIFO_DEPTH, 8) rx_buf_inst (.fifo (rx_buf));
-
-assign rx_buf.rst = rst;
-assign rx_buf.clk = clk;
-
-assign rx_buf.write = rxv;
-assign rx_buf.data_in = rxd;
-
-// output buffer
-fifo_sc_if #(OUTPUT_FIFO_DEPTH, 8) tx_buf(.*);
-fifo_sc #(OUTPUT_FIFO_DEPTH, 8) tx_buf_inst (.fifo (tx_buf));
-
-assign tx_buf.rst = rst;
-assign tx_buf.clk = clk;
-
-// parameter ram
-
-prm_entry_t prm_rom_q, cur_check;
-logic [$clog2(PRM_COUNT+1)-1:0] prm_ram_a_prev;
-
-// timeout
-
-logic rsp_err, rsp_ok, timeout;
-
-logic conv_bcd;
-logic scan_prm;
-
-err_prm_t err_prm;
-prm_fsm_t prm_fsm;
-
-logic tx_done;
-
-err_rx_t err_rx;
-
-logic [$clog2(TIMEOUT_TICKS+1)-1:0] to_ctr;
-logic [$clog2(EXEUTION_TIMEOUT_TICKS+1)-1:0] exe_to_ctr;
-
-always @ (posedge clk) begin
-  if (fsm_rst) begin
-    to_ctr <= 0;
-    timeout <= 0;
+  `include "../../esg_include/esg_reg_defines.sv"
+  
+  parameter integer BIN_W = $clog2(10**DAT_LEN);
+  parameter integer TIMEOUT_TICKS = 50000000;
+  parameter integer EXEUTION_TIMEOUT_TICKS = 10000000;
+  parameter integer INPUT_FIFO_DEPTH = 6;
+  parameter integer OUTPUT_FIFO_DEPTH = 6;
+  parameter integer READ_BY_ONE = 0; // force read by one byte. (needed for UART as it deasserts cts 1 tick later than needed, so every second bit is lost)
+  
+  // Command definitions
+  cmd_t set   = "set";   // Set val for a parameter. ex: "set.freq:10.25k;"
+  cmd_t get   = "get";   // Get current val of a parameter. ex: "get.freq;"
+  cmd_t mon   = "mon";   // Monitor a parameter. ex: "mon.current;"
+  cmd_t save  = "save";
+  cmd_t ver   = "ver";
+  cmd_t exe  = "exe";
+  
+   
+  fsm_rx_t fsm_rx;
+  fsm_tx_t fsm_tx;
+  fsm_bcd_t fsm_bcd;
+  
+  logic fsm_rst;
+  err_t err;
+  op_t cur_rx, cur_tx;
+  
+  logic dot_pres; 
+  logic k_mod_pres;
+  logic bcd2bin_rdy;
+  logic check_prm;
+  
+  logic [$clog2(CMD_LEN+1)-1:0] cmd_ctr_rx, cmd_ctr_tx;
+  logic [$clog2(PRM_LEN+1)-1:0] prm_ctr_rx, prm_ctr_tx;
+  logic [$clog2(DAT_LEN+1)-1:0] dat_ctr_rx, dat_ctr_tx, dot_pos;
+  
+  logic [2:0] shift;
+  logic [BIN_W-1:0] cur_rx_bin, cur_tx_bin;
+  logic [DAT_LEN-1:0][3:0] tx_bcd, cur_tx_bcd, rx_bcd;
+  logic conv_bcd2bin, conv_bin2bcd;
+  
+  // input buffer
+  fifo_sc_if #(INPUT_FIFO_DEPTH, 8) rx_buf(.*);
+  fifo_sc #(INPUT_FIFO_DEPTH, 8) rx_buf_inst (.fifo (rx_buf));
+  
+  assign rx_buf.rst = rst;
+  assign rx_buf.clk = clk;
+  
+  assign rx_buf.write = rxv;
+  assign rx_buf.data_in = rxd;
+  
+  // output buffer
+  fifo_sc_if #(OUTPUT_FIFO_DEPTH, 8) tx_buf(.*);
+  fifo_sc #(OUTPUT_FIFO_DEPTH, 8) tx_buf_inst (.fifo (tx_buf));
+  
+  assign tx_buf.rst = rst;
+  assign tx_buf.clk = clk;
+  
+  // parameter ram
+  
+  prm_entry_t prm_rom_q, cur_check;
+  logic [$clog2(PRM_COUNT+1)-1:0] prm_ram_a_prev;
+  
+  // timeout
+  
+  logic rsp_err, rsp_ok, timeout;
+  
+  logic conv_bcd;
+  logic scan_prm;
+  
+  err_prm_t err_prm;
+  prm_fsm_t prm_fsm;
+  
+  logic tx_done;
+  
+  err_rx_t err_rx;
+  
+  logic [$clog2(TIMEOUT_TICKS+1)-1:0] to_ctr;
+  logic [$clog2(EXEUTION_TIMEOUT_TICKS+1)-1:0] exe_to_ctr;
+  
+  always @ (posedge clk) begin
+    if (fsm_rst) begin
+      to_ctr <= 0;
+      timeout <= 0;
+    end
+    else begin
+      to_ctr <= (fsm_rx == rx_idle_s) ? 0 : to_ctr + 1;
+      if (to_ctr == TIMEOUT_TICKS) timeout <= 1;    
+    end
   end
-  else begin
-    to_ctr <= (fsm_rx == rx_idle_s) ? 0 : to_ctr + 1;
-    if (to_ctr == TIMEOUT_TICKS) timeout <= 1;    
+  
+  // ram/rom logic
+  
+  ram_if_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram(.*);
+  ram_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram_inst (.mem_if (prm_ram));
+  
+  esg_rom #(PRM_COUNT) esg_rom_inst (
+      .clk   (clk),
+      .addr  (prm_ram.a_a),
+      .entry (prm_rom_q)
+  );
+  
+  assign prm_ram.rst   = 1'b0;
+  assign prm_ram.clk_a = clk;
+  assign prm_ram.d_a   = cur_rx_bin;
+  assign cur_tx_bin    = prm_ram.q_a;
+  
+  // clock second port with externally provided clock
+  assign prm_ram.clk_b = clk;
+  assign prm_ram.a_b   = ram.a;
+  assign prm_ram.d_b   = ram.d;
+  assign prm_ram.w_b   = ram.w;
+  assign       ram.q   = prm_ram.q_b;
+  
+  always @ (posedge clk) begin
+    if (rst) begin
+      fsm_rst <= 1;
+    end
+    else begin
+      fsm_rst <= tx_done;
+      rx_buf.read <= (fsm_rx != rx_wait_rst_s) && !rx_buf.empty;
+    end
   end
-end
-
-// ram/rom logic
-
-ram_if_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram(.*);
-ram_dp #($clog2(PRM_COUNT+1), DAT_LEN_BITS) prm_ram_inst (.mem_if (prm_ram));
-
-p10_rom #(PRM_COUNT) p10_rom_inst (
-    .clk   (clk),
-    .addr  (prm_ram.a_a),
-    .entry (prm_rom_q)
-);
-
-assign prm_ram.rst   = 1'b0;
-assign prm_ram.clk_a = clk;
-assign prm_ram.d_a   = cur_rx_bin;
-assign cur_tx_bin    = prm_ram.q_a;
-
-// clock second port with externally provided clock
-assign prm_ram.clk_b = clk;
-assign prm_ram.a_b   = ram.a;
-assign prm_ram.d_b   = ram.d;
-assign prm_ram.w_b   = ram.w;
-assign       ram.q   = prm_ram.q_b;
-
-always @ (posedge clk) begin
-  if (rst) begin
-    fsm_rst <= 1;
-  end
-  else begin
-    fsm_rst <= tx_done;
-    rx_buf.read <= (fsm_rx != rx_wait_rst_s) && !rx_buf.empty;
-  end
-end
-
-logic rsp_ver;
-always @ (posedge clk) begin
-  if (fsm_rst) begin
-    fsm_rx     <= rx_idle_s;
-    cmd_ctr_rx <= 0;
-    prm_ctr_rx <= 0;
-    dat_ctr_rx <= 0;
-    cur_rx     <= 0;
-    dot_pos    <= 0;
-    dot_pres   <= 0;
-    k_mod_pres <= 0;
-    conv_bcd   <= 0;
-    scan_prm   <= 0;
-    err_rx     <= rx_ok;
-    rsp_ver    <= 0;
-  end
-  else if (rx_buf.valid_out) begin
-    case (fsm_rx)
-      rx_idle_s : begin
-        if (rx_buf.data_out == START_RX) fsm_rx <= rx_cmd_s;
-      end
-      rx_cmd_s : begin
-        if (cmd_ctr_rx == CMD_LEN) begin
-          err_rx <= cmd_bad;
-          $display("cmd too long");
+  
+  logic rsp_ver;
+  always @ (posedge clk) begin
+    if (fsm_rst) begin
+      fsm_rx     <= rx_idle_s;
+      cmd_ctr_rx <= 0;
+      prm_ctr_rx <= 0;
+      dat_ctr_rx <= 0;
+      cur_rx     <= 0;
+      dot_pos    <= 0;
+      dot_pres   <= 0;
+      k_mod_pres <= 0;
+      conv_bcd   <= 0;
+      scan_prm   <= 0;
+      err_rx     <= rx_ok;
+      rsp_ver    <= 0;
+    end
+    else if (rx_buf.valid_out) begin
+      case (fsm_rx)
+        rx_idle_s : begin
+          if (rx_buf.data_out == START_RX) fsm_rx <= rx_cmd_s;
         end
-        if (rx_buf.data_out == CMD_DLM) begin
-          $display("-> cmd: %s", cur_rx.cmd);
-          cur_rx.cmd_len = cmd_ctr_rx; // latch cmd len for correct response
-          case (cur_rx.cmd)
-            set, get, mon : begin
-              fsm_rx <= rx_prm_s;
+        rx_cmd_s : begin
+          if (cmd_ctr_rx == CMD_LEN) begin
+            err_rx <= cmd_bad;
+            $display("cmd too long");
+          end
+          if (rx_buf.data_out == CMD_DLM) begin
+            $display("-> cmd: %s", cur_rx.cmd);
+            cur_rx.cmd_len = cmd_ctr_rx; // latch cmd len for correct response
+            case (cur_rx.cmd)
+              set, get, mon : begin
+                fsm_rx <= rx_prm_s;
+              end
+              exe : begin
+                fsm_rx <= rx_prm_s;
+              end
+              default : err_rx <= cmd_bad;
+              endcase
             end
-            exe : begin
-              fsm_rx <= rx_prm_s;
+          else if (rx_buf.data_out == DAT_DLM) begin
+            if (cur_rx.cmd == ver) begin
+              rsp_ver <= 1;
+              fsm_rx <= rx_wait_rst_s;	  
             end
-            default : err_rx <= cmd_bad;
+          end
+  	      else begin
+            cmd_ctr_rx <= cmd_ctr_rx + 1;
+            cur_rx.cmd[CMD_LEN-1:1] <= cur_rx.cmd[CMD_LEN-2:0];
+            cur_rx.cmd[0] <= rx_buf.data_out;
+          end
+        end
+        rx_prm_s : begin
+          if (prm_ctr_rx == PRM_LEN) begin
+            err_rx <= prm_bad;
+            $display("prm too long");
+          end
+          if (rx_buf.data_out == PRM_DLM && cur_rx.cmd == set) begin
+            cur_rx.prm_len = prm_ctr_rx;
+            $display("-> prm: %s", cur_rx.prm);
+            fsm_rx <= rx_dat_s;
+          end
+          else if (rx_buf.data_out == DAT_DLM && (cur_rx.cmd == get || cur_rx.cmd == exe)) begin
+            cur_rx.prm_len = prm_ctr_rx;
+            $display("-> prm: %s", cur_rx.prm);
+            fsm_rx <= rx_wait_rst_s;
+            scan_prm <= 1;
+          end
+          else begin
+            prm_ctr_rx <= prm_ctr_rx + 1;
+            cur_rx.prm[PRM_LEN-1:1] <= cur_rx.prm[PRM_LEN-2:0];
+            cur_rx.prm[0] <= rx_buf.data_out;
+          end
+        end
+        rx_dat_s : begin
+          // user can input bad data in multiply ways. check it
+          if (dat_ctr_rx == DAT_LEN || // data is too long
+          dot_pos == 5 || // bad dot postion
+          ascii2bcd(rx_buf.data_out) == 4'hf || 
+          (rx_buf.data_out != DAT_DLM && k_mod_pres) || 
+          (rx_buf.data_out == DAT_DLM && !k_mod_pres && dot_pres)) begin
+            err_rx <= data_bad;
+            $display("data too long");
+          end
+          if (rx_buf.data_out == K_MOD) k_mod_pres <= 1;
+          if (rx_buf.data_out == DOT) dot_pres <= 1;
+          if (rx_buf.data_out == DAT_DLM) begin
+            $display("-> dat: %h", cur_rx.dat_bcd);
+            conv_bcd <= 1;
+            fsm_rx <= rx_wait_rst_s;
+          end
+          else begin
+            dat_ctr_rx <= dat_ctr_rx + 1;
+            if (rx_buf.data_out != "." && rx_buf.data_out != "k") begin
+              cur_rx.dat_bcd[DAT_LEN-1:1] <= cur_rx.dat_bcd[DAT_LEN-2:0];
+              cur_rx.dat_bcd[0] <= ascii2bcd(rx_buf.data_out);
+              if (dot_pres) dot_pos <= dot_pos + 1;
+            end
+          end
+        end
+        rx_wait_rst_s : begin
+  
+        end
+      endcase
+    end
+  end
+  
+  /*
+   * Shift data 
+   */
+  
+  always @ (posedge clk) begin
+    if (fsm_rst) begin
+      fsm_bcd <= bcd_idle_s;
+      shift <= 0;
+      rx_bcd <= 0;
+      check_prm <= 0;
+      conv_bcd2bin <= 0;
+    end
+    else begin
+      case (fsm_bcd)
+        bcd_idle_s : begin
+          if (conv_bcd) begin
+            shift   <= (dot_pres) ? 3-dot_pos : 3;
+            fsm_bcd <= bcd_shift_s;
+  	  			rx_bcd  <= cur_rx.dat_bcd;
+          end
+        end
+        bcd_shift_s : begin // shift bcd to account for k modifier
+          shift <= shift - 1;
+          if (shift == 0 || !k_mod_pres) begin
+            fsm_bcd <= bcd_conv_s;
+            conv_bcd2bin <= 1;
+          end
+          else rx_bcd[DAT_LEN-1:0] <= {rx_bcd[DAT_LEN-2:0], 4'h0};
+        end
+        bcd_conv_s : begin
+          conv_bcd2bin <= 0;
+          if (bcd2bin_rdy && !conv_bcd2bin) begin
+            check_prm <= 1;
+            $display("shifted real val. result: %h", rx_bcd);
+          end
+        end
+      endcase
+    end
+  end
+  
+  /*
+   * BCD to binary conversion when receiving
+   * Vice versa when replying
+   */
+  
+  bcd2bin #(
+  	.DEC_W (DAT_LEN)
+  ) bcd2bin_inst (
+  	.clk  (clk),
+  	.rst  (rst),
+  	.in   (rx_bcd),
+  	.out  (cur_rx_bin),
+  	.conv (conv_bcd2bin),
+  	.rdy  (bcd2bin_rdy)
+  );
+  bin2bcd #(
+  	.DEC_W (DAT_LEN)
+  ) bin2bcd_inst (
+  	.clk  (clk),
+  	.rst  (rst),
+  	.in   (cur_tx_bin),
+  	.out  (tx_bcd),
+  	.conv (conv_bin2bcd),
+  	.rdy  (bin2bcd_rdy)
+  );
+  
+  /////////////////////
+  // Parameter check //
+  /////////////////////
+  
+  always @ (posedge clk) begin
+    if (fsm_rst) begin
+      prm_fsm        <= prm_idle_s;
+      err_prm        <= prm_ok;
+      rsp_ok         <= 0;
+      prm_ram.a_a    <= 0;
+      prm_ram_a_prev <= 0;
+      conv_bin2bcd   <= 0;
+      prm_ram.w_a    <= 0;
+      exe_if.val     <= 0;
+      exe_if.addr    <= 0;
+      exe_to_ctr     <= 0;
+      cur_check      <= 0;
+    end
+    else begin
+      case (prm_fsm)
+        prm_idle_s : begin
+          if (check_prm || scan_prm) prm_fsm <= prm_scan_s;
+        end
+        prm_scan_s : begin
+          if (prm_rom_q.prm == cur_rx.prm) begin
+            cur_check <= prm_rom_q;
+            prm_ram.a_a <= prm_ram_a_prev;
+  		      $display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram.q_a);
+            case (cur_rx.cmd)
+              set : begin
+                if (!prm_rom_q.is_exe) prm_fsm <= prm_check_s; else
+                begin
+                  err_prm <= exe_only;
+                  prm_fsm <= prm_wait_rst_s;
+                end
+              end
+              exe : begin // exeutable command
+                if (prm_rom_q.is_exe) begin // check for "is exeutable" flag
+                  exe_if.addr <= prm_ram_a_prev; // 
+                  exe_if.val <= 1;
+                end
+                else err_prm <= not_exe;
+                prm_fsm <= prm_exe_s;
+              end
+              get : prm_fsm <= prm_conv_s; // go directly to convert internal binary to BCD
             endcase
           end
-        else if (rx_buf.data_out == DAT_DLM) begin
-          if (cur_rx.cmd == ver) begin
-            rsp_ver <= 1;
-            fsm_rx <= rx_wait_rst_s;	  
-          end
-        end
-	      else begin
-          cmd_ctr_rx <= cmd_ctr_rx + 1;
-          cur_rx.cmd[CMD_LEN-1:1] <= cur_rx.cmd[CMD_LEN-2:0];
-          cur_rx.cmd[0] <= rx_buf.data_out;
-        end
-      end
-      rx_prm_s : begin
-        if (prm_ctr_rx == PRM_LEN) begin
-          err_rx <= prm_bad;
-          $display("prm too long");
-        end
-        if (rx_buf.data_out == PRM_DLM && cur_rx.cmd == set) begin
-          cur_rx.prm_len = prm_ctr_rx;
-          $display("-> prm: %s", cur_rx.prm);
-          fsm_rx <= rx_dat_s;
-        end
-        else if (rx_buf.data_out == DAT_DLM && (cur_rx.cmd == get || cur_rx.cmd == exe)) begin
-          cur_rx.prm_len = prm_ctr_rx;
-          $display("-> prm: %s", cur_rx.prm);
-          fsm_rx <= rx_wait_rst_s;
-          scan_prm <= 1;
-        end
-        else begin
-          prm_ctr_rx <= prm_ctr_rx + 1;
-          cur_rx.prm[PRM_LEN-1:1] <= cur_rx.prm[PRM_LEN-2:0];
-          cur_rx.prm[0] <= rx_buf.data_out;
-        end
-      end
-      rx_dat_s : begin
-        // user can input bad data in multiply ways. check it
-        if (dat_ctr_rx == DAT_LEN || // data is too long
-        dot_pos == 5 || // bad dot postion
-        ascii2bcd(rx_buf.data_out) == 4'hf || 
-        (rx_buf.data_out != DAT_DLM && k_mod_pres) || 
-        (rx_buf.data_out == DAT_DLM && !k_mod_pres && dot_pres)) begin
-          err_rx <= data_bad;
-          $display("data too long");
-        end
-        if (rx_buf.data_out == K_MOD) k_mod_pres <= 1;
-        if (rx_buf.data_out == DOT) dot_pres <= 1;
-        if (rx_buf.data_out == DAT_DLM) begin
-          $display("-> dat: %h", cur_rx.dat_bcd);
-          conv_bcd <= 1;
-          fsm_rx <= rx_wait_rst_s;
-        end
-        else begin
-          dat_ctr_rx <= dat_ctr_rx + 1;
-          if (rx_buf.data_out != "." && rx_buf.data_out != "k") begin
-            cur_rx.dat_bcd[DAT_LEN-1:1] <= cur_rx.dat_bcd[DAT_LEN-2:0];
-            cur_rx.dat_bcd[0] <= ascii2bcd(rx_buf.data_out);
-            if (dot_pres) dot_pos <= dot_pos + 1;
-          end
-        end
-      end
-      rx_wait_rst_s : begin
-
-      end
-    endcase
-  end
-end
-
-/*
- * Shift data 
- */
-
-always @ (posedge clk) begin
-  if (fsm_rst) begin
-    fsm_bcd <= bcd_idle_s;
-    shift <= 0;
-    rx_bcd <= 0;
-    check_prm <= 0;
-    conv_bcd2bin <= 0;
-  end
-  else begin
-    case (fsm_bcd)
-      bcd_idle_s : begin
-        if (conv_bcd) begin
-          shift   <= (dot_pres) ? 3-dot_pos : 3;
-          fsm_bcd <= bcd_shift_s;
-	  			rx_bcd  <= cur_rx.dat_bcd;
-        end
-      end
-      bcd_shift_s : begin // shift bcd to account for k modifier
-        shift <= shift - 1;
-        if (shift == 0 || !k_mod_pres) begin
-          fsm_bcd <= bcd_conv_s;
-          conv_bcd2bin <= 1;
-        end
-        else rx_bcd[DAT_LEN-1:0] <= {rx_bcd[DAT_LEN-2:0], 4'h0};
-      end
-      bcd_conv_s : begin
-        conv_bcd2bin <= 0;
-        if (bcd2bin_rdy && !conv_bcd2bin) begin
-          check_prm <= 1;
-          $display("shifted real val. result: %h", rx_bcd);
-        end
-      end
-    endcase
-  end
-end
-
-/*
- * BCD to binary conversion when receiving
- * Vice versa when replying
- */
-
-bcd2bin #(
-	.DEC_W (DAT_LEN)
-) bcd2bin_inst (
-	.clk  (clk),
-	.rst  (rst),
-	.in   (rx_bcd),
-	.out  (cur_rx_bin),
-	.conv (conv_bcd2bin),
-	.rdy  (bcd2bin_rdy)
-);
-bin2bcd #(
-	.DEC_W (DAT_LEN)
-) bin2bcd_inst (
-	.clk  (clk),
-	.rst  (rst),
-	.in   (cur_tx_bin),
-	.out  (tx_bcd),
-	.conv (conv_bin2bcd),
-	.rdy  (bin2bcd_rdy)
-);
-
-/////////////////////
-// Parameter check //
-/////////////////////
-
-always @ (posedge clk) begin
-  if (fsm_rst) begin
-    prm_fsm        <= prm_idle_s;
-    err_prm        <= prm_ok;
-    rsp_ok         <= 0;
-    prm_ram.a_a    <= 0;
-    prm_ram_a_prev <= 0;
-    conv_bin2bcd   <= 0;
-    prm_ram.w_a    <= 0;
-    exe_if.val     <= 0;
-    exe_if.addr    <= 0;
-    exe_to_ctr     <= 0;
-    cur_check      <= 0;
-  end
-  else begin
-    case (prm_fsm)
-      prm_idle_s : begin
-        if (check_prm || scan_prm) prm_fsm <= prm_scan_s;
-      end
-      prm_scan_s : begin
-        if (prm_rom_q.prm == cur_rx.prm) begin
-          cur_check <= prm_rom_q;
-          prm_ram.a_a <= prm_ram_a_prev;
-		      $display ("Found parameter %s, val %d", prm_rom_q.prm, prm_ram.q_a);
-          case (cur_rx.cmd)
-            set : begin
-              if (!prm_rom_q.is_exe) prm_fsm <= prm_check_s; else
-              begin
-                err_prm <= exe_only;
-                prm_fsm <= prm_wait_rst_s;
-              end
+          else begin
+            if (prm_ram.a_a == PRM_COUNT + 1) begin // ROM scanned, no parameter with "cur_rx.prm" found
+              $display ("Parameter not found");
+              err_prm <= not_found;
             end
-            exe : begin // exeutable command
-              if (prm_rom_q.is_exe) begin // check for "is exeutable" flag
-                exe_if.addr <= prm_ram_a_prev; // 
-                exe_if.val <= 1;
-              end
-              else err_prm <= not_exe;
-              prm_fsm <= prm_exe_s;
-            end
-            get : prm_fsm <= prm_conv_s; // go directly to convert internal binary to BCD
-          endcase
-        end
-        else begin
-          if (prm_ram.a_a == PRM_COUNT + 1) begin // ROM scanned, no parameter with "cur_rx.prm" found
-            $display ("Parameter not found");
-            err_prm <= not_found;
+            prm_ram.a_a <= prm_ram.a_a + 1; // scan ROM for parameter string
           end
-          prm_ram.a_a <= prm_ram.a_a + 1; // scan ROM for parameter string
+          prm_ram_a_prev <= prm_ram.a_a;
         end
-        prm_ram_a_prev <= prm_ram.a_a;
-      end
-      prm_check_s : begin
-        if (cur_check.rights == r) begin
-          err_prm <= read_only;
-          prm_fsm <= prm_wait_rst_s;
-          $display ("Cannot write to a read only parameter");
+        prm_check_s : begin
+          if (cur_check.rights == r) begin
+            err_prm <= read_only;
+            prm_fsm <= prm_wait_rst_s;
+            $display ("Cannot write to a read only parameter");
+          end
+          else if (cur_rx_bin < cur_check.min) begin
+            $display ("Received val %d less than minimum %d", cur_rx_bin, cur_check.min);
+            err_prm <= low;
+            prm_fsm <= prm_wait_rst_s;
+          end
+          else if (cur_rx_bin > cur_check.max) begin
+            $display ("Received val %d more than maximum %d", cur_rx_bin, cur_check.max);
+            err_prm <= high;
+            prm_fsm <= prm_wait_rst_s;
+          end
+          else begin
+            rsp_ok <= 1;
+            $display ("Received val %d within limits: [%d..%d]", cur_rx_bin, cur_check.min, cur_check.max);
+            prm_fsm <= prm_write_s;
+            prm_ram.w_a <= 1;
+          end
         end
-        else if (cur_rx_bin < cur_check.min) begin
-          $display ("Received val %d less than minimum %d", cur_rx_bin, cur_check.min);
-          err_prm <= low;
-          prm_fsm <= prm_wait_rst_s;
+        prm_exe_s : begin
+          exe_to_ctr <= exe_to_ctr + 1;
+          if (exe_to_ctr == EXEUTION_TIMEOUT_TICKS) err_prm <= exe_to; 
+          else if (exe_if.err) begin
+  	        err_prm <= exe_err;
+  	        exe_if.val <= 0;
+  	      end
+  	      else if (exe_if.ok) begin
+  	        rsp_ok <= 1;
+  	        exe_if.val <= 0;
+  	      end
         end
-        else if (cur_rx_bin > cur_check.max) begin
-          $display ("Received val %d more than maximum %d", cur_rx_bin, cur_check.max);
-          err_prm <= high;
-          prm_fsm <= prm_wait_rst_s;
-        end
-        else begin
+        prm_write_s : begin
           rsp_ok <= 1;
-          $display ("Received val %d within limits: [%d..%d]", cur_rx_bin, cur_check.min, cur_check.max);
-          prm_fsm <= prm_write_s;
-          prm_ram.w_a <= 1;
-        end
-      end
-      prm_exe_s : begin
-        exe_to_ctr <= exe_to_ctr + 1;
-        if (exe_to_ctr == EXEUTION_TIMEOUT_TICKS) err_prm <= exe_to; 
-        else if (exe_if.err) begin
-	        err_prm <= exe_err;
-	        exe_if.val <= 0;
-	      end
-	      else if (exe_if.ok) begin
-	        rsp_ok <= 1;
-	        exe_if.val <= 0;
-	      end
-      end
-      prm_write_s : begin
-        rsp_ok <= 1;
-        prm_ram.w_a <= 0;
-        prm_fsm <= prm_wait_rst_s;
-      end
-      prm_conv_s : begin
-        conv_bin2bcd <= 1;
-        prm_fsm <= prm_read_s;
-      end
-      prm_read_s : begin
-        conv_bin2bcd <= 0;
-        if (bin2bcd_rdy && !conv_bin2bcd) begin
+          prm_ram.w_a <= 0;
           prm_fsm <= prm_wait_rst_s;
-          rsp_ok <= 1;
         end
-      end
-      prm_wait_rst_s : begin
-
-      end
-    endcase
-  end
-end
-
-//////////////////////
-// Error gatherning //
-//////////////////////
-
-always @ (posedge clk) begin
-  if (fsm_rst) begin
-    err <= none;
-    rsp_err <= 0;
-  end
-  else begin
-    rsp_err <= (err != none);
-    if (timeout) err <= rx_timeout;
-    else if (err_rx != rx_ok) begin
-      case (err_rx)
-        rx_ok        : err <= none;
-        cmd_bad      : err <= rx_cmd_bad;
-        data_bad     : err <= rx_data_bad;
-        prm_bad      : err <= rx_prm_bad;
-        data_not_int : err <= rx_data_not_int;
-        default      : err <= none;
-      endcase
-    end
-    else if (err_prm != prm_ok) begin
-      case (err_prm)
-        prm_ok       : err <= none;
-        not_found    : err <= prm_not_found;
-        exe_only    : err <= prm_exe_only;
-        not_exe     : err <= prm_not_exe;
-        exe_err     : err <= prm_exe_err;
-        exe_to      : err <= prm_exe_to;
-        read_only    : err <= prm_read_only;
-        low          : err <= prm_low;
-        high         : err <= prm_high;
-        default      : err <= none;
+        prm_conv_s : begin
+          conv_bin2bcd <= 1;
+          prm_fsm <= prm_read_s;
+        end
+        prm_read_s : begin
+          conv_bin2bcd <= 0;
+          if (bin2bcd_rdy && !conv_bin2bcd) begin
+            prm_fsm <= prm_wait_rst_s;
+            rsp_ok <= 1;
+          end
+        end
+        prm_wait_rst_s : begin
+  
+        end
       endcase
     end
   end
-end
-
-//////////////
-// Response //
-//////////////
-
-logic cmd_tx_len;
-logic prm_tx_len;
-logic value_tx_len;
-logic tx_bcd_val;
-logic [7:0] cur_dig;
-
-parameter integer STRING_LEN = 32;
-parameter integer NUM_ERRORS = 16;
-
-typedef struct packed {
-  logic [0:STRING_LEN-1][7:0] val;
-  err_t err;
-} rsp_err_t;
-
-rsp_err_t rsp_rom [0:NUM_ERRORS-1];
-rsp_err_t rsp_rom_q;
-
-logic [$clog2(NUM_ERRORS+1)-1:0] rsp_rom_addr;
-
-always @ (posedge clk) begin
-  rsp_rom_q <= rsp_rom[rsp_rom_addr];
-end
-
-logic [0:STRING_LEN-1][7:0] cur_rsp_string, param_set_str, exe_success_str, ver_string, unknown_err_str;
-logic [7:0] cur_rsp_ctr;
-
-initial begin
-  rsp_rom[0].val = "error:bad command";
-  rsp_rom[0].err = rx_cmd_bad;
-
-  rsp_rom[1].val = "error:bad data";
-  rsp_rom[1].err = rx_data_bad;
-
-  rsp_rom[2].val = "error:bad parameter";
-  rsp_rom[2].err = rx_prm_bad;
-
-  rsp_rom[3].val = "error:data not int";
-  rsp_rom[3].err = rx_data_not_int;
-
-  rsp_rom[4].val = "error:read-only";
-  rsp_rom[4].err = prm_read_only;   
-
-  rsp_rom[5].val = "error:parameter not found";
-  rsp_rom[5].err = prm_not_found;   
-
-  rsp_rom[6].val = "error:executable only";
-  rsp_rom[6].err = prm_exe_only;   
-
-  rsp_rom[7].val = "error:not executable";
-  rsp_rom[7].err = prm_not_exe;   
-    
-  rsp_rom[8].val = "error:failed to execute";
-  rsp_rom[8].err = prm_exe_err;   
-
-  rsp_rom[9].val = "error:execution timeout";
-  rsp_rom[9].err = prm_exe_to;   
-
-  rsp_rom[10].val = "error:value too low";
-  rsp_rom[10].err = prm_low;   
-
-  rsp_rom[11].val = "error:value too high";
-  rsp_rom[11].err = prm_high;
-
-  rsp_rom[12].val = "error:timeout";
-  rsp_rom[12].err = rx_timeout;
-
-  param_set_str = ":parameter set";
-  exe_success_str = ":executed successfully";
-  unknown_err_str = "error:unknown error";
-  ver_string = `VERSION;
-end
-
-logic [$clog2(UNITS_LEN+1)-1:0] units_rsp_ctr;
-logic [UNITS_LEN-1:0][7:0] cur_tx_units;
-	
-always @ (posedge clk) begin
-  if (fsm_rst) begin
-    tx_buf.data_in <= 0;
-    tx_buf.write   <= 0;
-    cmd_ctr_tx     <= 0;
-    prm_ctr_tx     <= 0;
-    dat_ctr_tx     <= 0;
-    cur_tx_bcd     <= 0;
-    fsm_tx         <= tx_idle_s;
-    tx_bcd_val     <= 0;
-    cur_dig        <= 0;
-    tx_done        <= 0;
-    rsp_rom_addr   <= 0;
-    cur_rsp_string <= 0;
-    cur_rsp_ctr    <= 0;
-    units_rsp_ctr  <= 0;
-    cur_tx_units   <= 0;
+  
+  //////////////////////
+  // Error gatherning //
+  //////////////////////
+  
+  always @ (posedge clk) begin
+    if (fsm_rst) begin
+      err <= none;
+      rsp_err <= 0;
+    end
+    else begin
+      rsp_err <= (err != none);
+      if (timeout) err <= rx_timeout;
+      else if (err_rx != rx_ok) begin
+        case (err_rx)
+          rx_ok        : err <= none;
+          cmd_bad      : err <= rx_cmd_bad;
+          data_bad     : err <= rx_data_bad;
+          prm_bad      : err <= rx_prm_bad;
+          data_not_int : err <= rx_data_not_int;
+          default      : err <= none;
+        endcase
+      end
+      else if (err_prm != prm_ok) begin
+        case (err_prm)
+          prm_ok       : err <= none;
+          not_found    : err <= prm_not_found;
+          exe_only    : err <= prm_exe_only;
+          not_exe     : err <= prm_not_exe;
+          exe_err     : err <= prm_exe_err;
+          exe_to      : err <= prm_exe_to;
+          read_only    : err <= prm_read_only;
+          low          : err <= prm_low;
+          high         : err <= prm_high;
+          default      : err <= none;
+        endcase
+      end
+    end
   end
-  else begin
-    case (fsm_tx)
-      tx_idle_s : begin
-        tx_buf.data_in <= ">";
-        cur_tx <= cur_rx;
-        if (rsp_ver) begin
-          tx_buf.write <= 1;
-          cur_rsp_string <= ver_string;
-          fsm_tx <= tx_string_s;
-        end
-        else if (rsp_ok) begin
-          tx_buf.write <= 1;
-          cmd_ctr_tx <= 0;
-          prm_ctr_tx <= 0;
-          dat_ctr_tx <= 0;
-          cur_tx_bcd <= tx_bcd;
-          cur_tx_units <= prm_rom_q.units;
-          case (cur_rx.cmd)
-            set : cur_rsp_string <= param_set_str;
-            exe : cur_rsp_string <= exe_success_str;
-				    default : cur_rsp_string <= unknown_err_str;
-			    endcase	
-          fsm_tx <= tx_prm_s;
-        end
-        else if (rsp_err) begin
-          rsp_rom_addr <= rsp_rom_addr + 1;
-          if (rsp_rom_q.err == err) begin
+  
+  //////////////
+  // Response //
+  //////////////
+  
+  logic cmd_tx_len;
+  logic prm_tx_len;
+  logic value_tx_len;
+  logic tx_bcd_val;
+  logic [7:0] cur_dig;
+  
+  parameter integer STRING_LEN = 32;
+  parameter integer NUM_ERRORS = 16;
+  
+  typedef struct packed {
+    logic [0:STRING_LEN-1][7:0] val;
+    err_t err;
+  } rsp_err_t;
+  
+  rsp_err_t rsp_rom [0:NUM_ERRORS-1];
+  rsp_err_t rsp_rom_q;
+  
+  logic [$clog2(NUM_ERRORS+1)-1:0] rsp_rom_addr;
+  
+  always @ (posedge clk) begin
+    rsp_rom_q <= rsp_rom[rsp_rom_addr];
+  end
+  
+  logic [0:STRING_LEN-1][7:0] cur_rsp_string, param_set_str, exe_success_str, ver_string, unknown_err_str;
+  logic [7:0] cur_rsp_ctr;
+  
+  initial begin
+    rsp_rom[0].val = "error:bad command";
+    rsp_rom[0].err = rx_cmd_bad;
+  
+    rsp_rom[1].val = "error:bad data";
+    rsp_rom[1].err = rx_data_bad;
+  
+    rsp_rom[2].val = "error:bad parameter";
+    rsp_rom[2].err = rx_prm_bad;
+  
+    rsp_rom[3].val = "error:data not int";
+    rsp_rom[3].err = rx_data_not_int;
+  
+    rsp_rom[4].val = "error:read-only";
+    rsp_rom[4].err = prm_read_only;   
+  
+    rsp_rom[5].val = "error:parameter not found";
+    rsp_rom[5].err = prm_not_found;   
+  
+    rsp_rom[6].val = "error:executable only";
+    rsp_rom[6].err = prm_exe_only;   
+  
+    rsp_rom[7].val = "error:not executable";
+    rsp_rom[7].err = prm_not_exe;   
+      
+    rsp_rom[8].val = "error:failed to execute";
+    rsp_rom[8].err = prm_exe_err;   
+  
+    rsp_rom[9].val = "error:execution timeout";
+    rsp_rom[9].err = prm_exe_to;   
+  
+    rsp_rom[10].val = "error:value too low";
+    rsp_rom[10].err = prm_low;   
+  
+    rsp_rom[11].val = "error:value too high";
+    rsp_rom[11].err = prm_high;
+  
+    rsp_rom[12].val = "error:timeout";
+    rsp_rom[12].err = rx_timeout;
+  
+    param_set_str = ":parameter set";
+    exe_success_str = ":executed successfully";
+    unknown_err_str = "error:unknown error";
+    ver_string = `VERSION;
+  end
+  
+  logic [$clog2(UNITS_LEN+1)-1:0] units_rsp_ctr;
+  logic [UNITS_LEN-1:0][7:0] cur_tx_units;
+  	
+  always @ (posedge clk) begin
+    if (fsm_rst) begin
+      tx_buf.data_in <= 0;
+      tx_buf.write   <= 0;
+      cmd_ctr_tx     <= 0;
+      prm_ctr_tx     <= 0;
+      dat_ctr_tx     <= 0;
+      cur_tx_bcd     <= 0;
+      fsm_tx         <= tx_idle_s;
+      tx_bcd_val     <= 0;
+      cur_dig        <= 0;
+      tx_done        <= 0;
+      rsp_rom_addr   <= 0;
+      cur_rsp_string <= 0;
+      cur_rsp_ctr    <= 0;
+      units_rsp_ctr  <= 0;
+      cur_tx_units   <= 0;
+    end
+    else begin
+      case (fsm_tx)
+        tx_idle_s : begin
+          tx_buf.data_in <= ">";
+          cur_tx <= cur_rx;
+          if (rsp_ver) begin
             tx_buf.write <= 1;
+            cur_rsp_string <= ver_string;
             fsm_tx <= tx_string_s;
-            cur_rsp_string <= rsp_rom_q.val;
+          end
+          else if (rsp_ok) begin
+            tx_buf.write <= 1;
+            cmd_ctr_tx <= 0;
+            prm_ctr_tx <= 0;
+            dat_ctr_tx <= 0;
+            cur_tx_bcd <= tx_bcd;
+            cur_tx_units <= prm_rom_q.units;
+            case (cur_rx.cmd)
+              set : cur_rsp_string <= param_set_str;
+              exe : cur_rsp_string <= exe_success_str;
+  				    default : cur_rsp_string <= unknown_err_str;
+  			    endcase	
+            fsm_tx <= tx_prm_s;
+          end
+          else if (rsp_err) begin
+            rsp_rom_addr <= rsp_rom_addr + 1;
+            if (rsp_rom_q.err == err) begin
+              tx_buf.write <= 1;
+              fsm_tx <= tx_string_s;
+              cur_rsp_string <= rsp_rom_q.val;
+            end
           end
         end
-      end
-      tx_cmd_s : begin
-        cur_tx.cmd[CMD_LEN-1:1] <= cur_tx.cmd[CMD_LEN-2:0];
-        tx_buf.write <= (cur_tx.cmd[CMD_LEN-1] != "");
-        tx_buf.data_in <= cur_tx.cmd[CMD_LEN-1];
-        cmd_ctr_tx <= cmd_ctr_tx + 1;
-        if (cmd_ctr_tx == CMD_LEN - 1) fsm_tx <= tx_prm_s;
-      end
-      tx_prm_s : begin
-        cur_tx.prm[PRM_LEN-1:1] <= cur_tx.prm[PRM_LEN-2:0];
-        tx_buf.write <= (cur_tx.prm[PRM_LEN-1] != "");
-        tx_buf.data_in <= cur_tx.prm[PRM_LEN-1];
-        prm_ctr_tx <= prm_ctr_tx + 1;
-        if (prm_ctr_tx == PRM_LEN - 1) begin
-          case (cur_rx.cmd)     
-            set, exe : fsm_tx <= tx_string_s;
-            get : fsm_tx <= tx_prm_dlm_s;
-            default : fsm_tx <= tx_stop_s;
-          endcase
+        tx_cmd_s : begin
+          cur_tx.cmd[CMD_LEN-1:1] <= cur_tx.cmd[CMD_LEN-2:0];
+          tx_buf.write <= (cur_tx.cmd[CMD_LEN-1] != "");
+          tx_buf.data_in <= cur_tx.cmd[CMD_LEN-1];
+          cmd_ctr_tx <= cmd_ctr_tx + 1;
+          if (cmd_ctr_tx == CMD_LEN - 1) fsm_tx <= tx_prm_s;
         end
-      end
-      tx_prm_dlm_s : begin
-        tx_buf.data_in <= PRM_DLM;
-        tx_buf.write <= 1;
-        fsm_tx <= tx_dat_s;
-      end
-      tx_dat_s : begin
-        dat_ctr_tx <= dat_ctr_tx + 1;
-        if (cur_tx_bcd[DAT_LEN-1] != 0 || (dat_ctr_tx == DAT_LEN-1)) tx_bcd_val <= 1; // append last symbol (zero) anyway
-        cur_tx_bcd[DAT_LEN-1:1] <= cur_tx_bcd[DAT_LEN-2:0];
-        cur_dig <= bcd2ascii(cur_tx_bcd[DAT_LEN-1]);
-        tx_buf.data_in <= cur_dig;
-        tx_buf.write <= tx_bcd_val;
-        if (dat_ctr_tx == DAT_LEN) fsm_tx <= tx_units_s;
-      end
-      tx_units_s : begin
-        units_rsp_ctr <= units_rsp_ctr + 1;
-        cur_tx_units[UNITS_LEN-1:1] <= cur_tx_units[UNITS_LEN-2:0];
-        if (units_rsp_ctr == UNITS_LEN-1) fsm_tx <= tx_stop_s;
-        tx_buf.write <= (cur_tx_units[UNITS_LEN-1] != "");
-        tx_buf.data_in <= cur_tx_units[UNITS_LEN-1];
-      end      
-      tx_stop_s : begin
-        tx_buf.data_in <= DAT_DLM;
-        tx_buf.write <= 1;
-        fsm_tx <= tx_cr_s;
-      end
-      tx_cr_s : begin
-        tx_buf.data_in <= "\r";
-        tx_buf.write <= 1;
-        fsm_tx <= tx_lf_s;
-      end
-      tx_lf_s : begin
-        tx_buf.data_in <= "\n";
-        tx_buf.write <= 1;
-        fsm_tx <= tx_wait_rst_s;
-      end
-      tx_string_s : begin // transmit response string
-        cur_rsp_ctr <= cur_rsp_ctr + 1;
-        if (cur_rsp_ctr == STRING_LEN-1) fsm_tx <= tx_stop_s;
-        if (cur_rsp_string[0] != 0) tx_buf.write <= 1;
-        else if (cur_rsp_ctr == 0) tx_buf.write <= 0;
-        cur_rsp_string[0:STRING_LEN-2] <= cur_rsp_string[1:STRING_LEN-1];
-        tx_buf.data_in <= cur_rsp_string[0];
-      end
-      tx_wait_rst_s : begin
-        tx_buf.write <= 0;
-        tx_buf.data_in <= 0;
-        tx_done <= 1;
-      end
-      default fsm_tx <= tx_idle_s;
-    endcase
+        tx_prm_s : begin
+          cur_tx.prm[PRM_LEN-1:1] <= cur_tx.prm[PRM_LEN-2:0];
+          tx_buf.write <= (cur_tx.prm[PRM_LEN-1] != "");
+          tx_buf.data_in <= cur_tx.prm[PRM_LEN-1];
+          prm_ctr_tx <= prm_ctr_tx + 1;
+          if (prm_ctr_tx == PRM_LEN - 1) begin
+            case (cur_rx.cmd)     
+              set, exe : fsm_tx <= tx_string_s;
+              get : fsm_tx <= tx_prm_dlm_s;
+              default : fsm_tx <= tx_stop_s;
+            endcase
+          end
+        end
+        tx_prm_dlm_s : begin
+          tx_buf.data_in <= PRM_DLM;
+          tx_buf.write <= 1;
+          fsm_tx <= tx_dat_s;
+        end
+        tx_dat_s : begin
+          dat_ctr_tx <= dat_ctr_tx + 1;
+          if (cur_tx_bcd[DAT_LEN-1] != 0 || (dat_ctr_tx == DAT_LEN-1)) tx_bcd_val <= 1; // append last symbol (zero) anyway
+          cur_tx_bcd[DAT_LEN-1:1] <= cur_tx_bcd[DAT_LEN-2:0];
+          cur_dig <= bcd2ascii(cur_tx_bcd[DAT_LEN-1]);
+          tx_buf.data_in <= cur_dig;
+          tx_buf.write <= tx_bcd_val;
+          if (dat_ctr_tx == DAT_LEN) fsm_tx <= tx_units_s;
+        end
+        tx_units_s : begin
+          units_rsp_ctr <= units_rsp_ctr + 1;
+          cur_tx_units[UNITS_LEN-1:1] <= cur_tx_units[UNITS_LEN-2:0];
+          if (units_rsp_ctr == UNITS_LEN-1) fsm_tx <= tx_stop_s;
+          tx_buf.write <= (cur_tx_units[UNITS_LEN-1] != "");
+          tx_buf.data_in <= cur_tx_units[UNITS_LEN-1];
+        end      
+        tx_stop_s : begin
+          tx_buf.data_in <= DAT_DLM;
+          tx_buf.write <= 1;
+          fsm_tx <= tx_cr_s;
+        end
+        tx_cr_s : begin
+          tx_buf.data_in <= "\r";
+          tx_buf.write <= 1;
+          fsm_tx <= tx_lf_s;
+        end
+        tx_lf_s : begin
+          tx_buf.data_in <= "\n";
+          tx_buf.write <= 1;
+          fsm_tx <= tx_wait_rst_s;
+        end
+        tx_string_s : begin // transmit response string
+          cur_rsp_ctr <= cur_rsp_ctr + 1;
+          if (cur_rsp_ctr == STRING_LEN-1) fsm_tx <= tx_stop_s;
+          if (cur_rsp_string[0] != 0) tx_buf.write <= 1;
+          else if (cur_rsp_ctr == 0) tx_buf.write <= 0;
+          cur_rsp_string[0:STRING_LEN-2] <= cur_rsp_string[1:STRING_LEN-1];
+          tx_buf.data_in <= cur_rsp_string[0];
+        end
+        tx_wait_rst_s : begin
+          tx_buf.write <= 0;
+          tx_buf.data_in <= 0;
+          tx_done <= 1;
+        end
+        default fsm_tx <= tx_idle_s;
+      endcase
+    end
   end
-end
-
-always @ (posedge clk) begin
-  if (rst) begin
-    tx_buf.read <= 0;
+  
+  always @ (posedge clk) begin
+    if (rst) begin
+      tx_buf.read <= 0;
+    end
+    else begin
+      tx_buf.read <= (cts && !tx_buf.empty && !(READ_BY_ONE && tx_buf.read)); // readout bytes by one if clear to send high
+    end
   end
-  else begin
-    tx_buf.read <= (cts && !tx_buf.empty && !(READ_BY_ONE && tx_buf.read)); // readout bytes by one if clear to send high
-  end
-end
-
-assign txv = tx_buf.valid_out;
-assign txd = tx_buf.data_out;
-
-assign txen = !tx_buf.empty;
+  
+  assign txv = tx_buf.valid_out;
+  assign txd = tx_buf.data_out;
+  
+  assign txen = !tx_buf.empty;
 
 endmodule : esg
