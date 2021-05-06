@@ -222,7 +222,7 @@ module esg #(
   exe.out exe_if
 );
 
-`include "../src/verilog/p10_reg_defines.sv"
+`include "../../esg_include/esg_reg_defines.sv"
 
 parameter integer BIN_W = $clog2(10**DAT_LEN);
 parameter integer TIMEOUT_TICKS = 50000000;
